@@ -3,27 +3,26 @@
 
 global gdipToken := 0
 
-SetTimer(WatchClipboard, 1000)
-return
+; Set timer once, no Return after
+SetTimer(WatchClipboard, 35)
 
 WatchClipboard() {
     static lastClip := ""
 
-    if !ClipWait(1)
+    clip := A_Clipboard
+    if (clip = lastClip)
         return
 
-    clip := A_Clipboard
     m := []
-
-    if (clip != lastClip && RegExMatch(clip, "^https://gyazo\.com/([a-zA-Z0-9]+)", &m)) {
+    if (RegExMatch(clip, "^https://gyazo\.com/([a-zA-Z0-9]+)", &m)) {
         lastClip := clip
         id := m[1]
         imageURL := "https://i.gyazo.com/" id ".png"
 
         try {
             ImagePutClipboard(imageURL)
-        } catch as e {
-            MsgBox("Failed to copy image to clipboard: " e.Message)
+        } catch {
+            ; Fail silently
         }
     }
 }
