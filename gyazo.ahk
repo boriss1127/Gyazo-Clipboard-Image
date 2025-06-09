@@ -1,6 +1,8 @@
 ﻿#Requires AutoHotkey v2.0
 #Include ImagePut.ahk
 
+global gdipToken := 0
+
 SetTimer(WatchClipboard, 1000)
 return
 
@@ -96,23 +98,22 @@ LoadImageAsBitmap(FilePath) {
 
 ; Helper: Convert HBITMAP to DIB section (returns handle to DIB)
 BitmapToDIB(hBitmap) {
-    ; Get bitmap info
     bi := Buffer(40, 0)
-    NumPut(40, bi, 0, "UInt") ; biSize
+    NumPut(40, bi, 0, "UInt")
     DllCall("gdi32\GetObjectW", "Ptr", hBitmap, "Int", 40, "Ptr", bi.Ptr)
     width := NumGet(bi, 4, "Int")
     height := NumGet(bi, 8, "Int")
     bits := NumGet(bi, 18, "UShort")
-    if (bits != 24 && bits != 32) ; Only support 24/32bpp
+    if (bits != 24 && bits != 32)
         return 0
-    ; Create DIB section
+
     bi2 := Buffer(40, 0)
-    NumPut(40, bi2, 0, "UInt") ; biSize
+    NumPut(40, bi2, 0, "UInt")
     NumPut(width, bi2, 4, "Int")
     NumPut(height, bi2, 8, "Int")
-    NumPut(1, bi2, 12, "UShort") ; biPlanes
-    NumPut(bits, bi2, 14, "UShort") ; biBitCount
-    NumPut(0, bi2, 16, "UInt") ; biCompression (BI_RGB)
+    NumPut(1, bi2, 12, "UShort")
+    NumPut(bits, bi2, 14, "UShort")
+    NumPut(0, bi2, 16, "UInt")
     hdc := DllCall("user32\GetDC", "Ptr", 0, "Ptr")
     pBits := 0
     hDIB := DllCall("gdi32\CreateDIBSection", "Ptr", hdc, "Ptr", bi2.Ptr, "UInt", 0, "Ptr*", &pBits, "Ptr", 0, "UInt",
@@ -120,7 +121,7 @@ BitmapToDIB(hBitmap) {
     DllCall("user32\ReleaseDC", "Ptr", 0, "Ptr", hdc)
     if !hDIB
         return 0
-    ; Copy bitmap bits
+
     hdcSrc := DllCall("gdi32\CreateCompatibleDC", "Ptr", 0, "Ptr")
     hdcDst := DllCall("gdi32\CreateCompatibleDC", "Ptr", 0, "Ptr")
     obmSrc := DllCall("gdi32\SelectObject", "Ptr", hdcSrc, "Ptr", hBitmap, "Ptr")
@@ -140,14 +141,14 @@ DeleteObject(hObj) {
 }
 
 Gdip_Startup() {
-    static pToken := 0
-    if pToken
-        return pToken
+    global gdipToken
+    if gdipToken
+        return gdipToken
 
     GdiplusStartupInput := Buffer(16, 0)
     NumPut("UInt", 1, GdiplusStartupInput)
-    DllCall("gdiplus\GdiplusStartup", "Ptr*", &pToken, "Ptr", GdiplusStartupInput, "Ptr", 0)
-    return pToken
+    DllCall("gdiplus\GdiplusStartup", "Ptr*", &gdipToken, "Ptr", GdiplusStartupInput, "Ptr", 0)
+    return gdipToken
 }
 
 Gdip_Shutdown(pToken) {
@@ -182,11 +183,12 @@ Gdip_DisposeImage(pBitmap) {
 OpenClipboard(hWnd := 0) => DllCall("user32\OpenClipboard", "Ptr", hWnd)
 EmptyClipboard() => DllCall("user32\EmptyClipboard")
 SetClipboardData(f, h) => DllCall("user32\SetClipboardData", "UInt", f, "Ptr", h)
-CloseClipboard() => DllCall("user32\CloseClipboard")
+CloseClipboard() => DllCall("user32\CloseClipboard", "Ptr")
 
+; Ensure cleanup on exit
 OnExit(ShutdownGDI)
-ShutdownGDI(*) {
-    Gdip_Shutdown(Gdip_Startup())
-}
 
-; hi
+ShutdownGDI(*) {
+    global gdipToken
+    Gdip_Shutdown(gdipToken)
+}
